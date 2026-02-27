@@ -1,0 +1,1780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0f1e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="My Stocks">
+<title>My Stocks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/dexie@3.2.4/dist/dexie.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+:root {
+  --bg: #080d1a;
+  --bg2: #0d1425;
+  --bg3: #111827;
+  --bg4: #1a2235;
+  --border: rgba(99,179,237,0.12);
+  --border2: rgba(99,179,237,0.2);
+  --accent: #3b82f6;
+  --accent2: #60a5fa;
+  --accent3: #93c5fd;
+  --green: #10b981;
+  --green2: #34d399;
+  --red: #ef4444;
+  --red2: #f87171;
+  --yellow: #f59e0b;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --text3: #64748b;
+  --radius: 16px;
+  --radius2: 10px;
+  --nav-h: 68px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --font-display: 'Syne', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-display);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* Grid noise overlay */
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(59,130,246,0.15), transparent),
+    radial-gradient(ellipse 40% 30% at 80% 80%, rgba(16,185,129,0.06), transparent);
+  pointer-events:none;
+  z-index:0;
+}
+
+/* ===== LAYOUT ===== */
+#app { 
+  max-width: 900px; 
+  margin: 0 auto; 
+  position: relative; 
+  z-index: 1;
+}
+
+.page { 
+  display: none; 
+  padding: 20px 16px calc(var(--nav-h) + var(--safe-bottom) + 20px); 
+  min-height: 100dvh;
+  animation: fadeIn 0.2s ease;
+}
+.page.active { display: block; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+
+/* ===== PAGE HEADER ===== */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding-top: 12px;
+}
+.page-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, var(--text) 0%, var(--accent2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.page-subtitle { font-size: 13px; color: var(--text3); font-weight: 500; margin-top: 2px; }
+
+/* ===== BOTTOM NAV ===== */
+#bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0; right: 0;
+  z-index: 100;
+  background: rgba(13,20,37,0.92);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+  padding-bottom: var(--safe-bottom);
+  max-width: 900px;
+  margin: 0 auto;
+}
+.nav-inner {
+  display: flex;
+  align-items: stretch;
+  height: var(--nav-h);
+}
+.nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text3);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  transition: color 0.2s;
+  padding: 8px 4px;
+  position: relative;
+}
+.nav-btn.active { color: var(--accent2); }
+.nav-btn.active::before {
+  content:'';
+  position:absolute;
+  top:0; left:20%; right:20%;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 0 0 2px 2px;
+}
+.nav-btn svg { width:20px; height:20px; stroke-width:1.8; }
+.nav-btn span { font-size: 9.5px; }
+
+/* ===== CARDS ===== */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card-sm { padding: 14px 16px; }
+.card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.card-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color: var(--text3); }
+
+/* ===== STAT CARDS ===== */
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.stat-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius2);
+  padding: 16px;
+}
+.stat-card.wide { grid-column: 1/-1; }
+.stat-label { font-size: 11px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: 800; font-family: var(--font-mono); color: var(--text); }
+.stat-value.green { color: var(--green2); }
+.stat-value.accent { color: var(--accent2); }
+.stat-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+/* ===== COST BREAKDOWN ===== */
+.breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.breakdown-row:last-child { border-bottom: none; font-weight: 700; }
+.breakdown-label { font-size: 14px; color: var(--text2); display:flex; align-items:center; gap:8px; }
+.breakdown-value { font-family: var(--font-mono); font-size: 14px; font-weight: 600; }
+.clickable-row { cursor: pointer; }
+.clickable-row:hover .breakdown-label { color: var(--accent2); }
+
+/* ===== FORMS ===== */
+.form-group { margin-bottom: 16px; }
+.form-label { display:block; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--text3); margin-bottom:8px; }
+.form-input, .form-select {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius2);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 15px;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.form-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center; padding-right:36px; }
+.form-input:focus, .form-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+.form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.form-row-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+
+/* ===== LIVE BREAKDOWN ===== */
+.live-breakdown {
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius2);
+  padding: 14px;
+  margin-top: 4px;
+}
+.lb-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:13px; }
+.lb-label { color: var(--text3); }
+.lb-value { font-family: var(--font-mono); font-weight: 600; }
+.lb-total { border-top: 1px solid var(--border); margin-top:6px; padding-top:8px; font-weight:800; font-size:15px; }
+.lb-total .lb-value { color: var(--accent2); }
+
+/* ===== BUTTONS ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: var(--radius2);
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(59,130,246,0.4); }
+.btn-success { background: var(--green); color: #fff; }
+.btn-success:hover { background: var(--green2); }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-danger:hover { background: var(--red2); }
+.btn-ghost { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+.btn-ghost:hover { border-color: var(--border2); color: var(--text); }
+.btn-sm { padding: 7px 12px; font-size: 12px; }
+.btn-full { width:100%; }
+.btn-icon { padding: 9px; border-radius: 8px; }
+
+/* ===== TAB TOGGLE ===== */
+.tab-toggle { display:flex; background:var(--bg3); border-radius:var(--radius2); padding:4px; margin-bottom:20px; border:1px solid var(--border); }
+.tab-btn {
+  flex:1; padding:10px; border:none; background:none; border-radius:8px;
+  font-family:var(--font-display); font-weight:700; font-size:14px; cursor:pointer;
+  color:var(--text3); transition:all 0.2s;
+}
+.tab-btn.active { background:var(--accent); color:#fff; box-shadow:0 2px 10px rgba(59,130,246,0.4); }
+
+/* ===== HOLDINGS LIST ===== */
+.holding-item {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 0; border-bottom:1px solid var(--border);
+}
+.holding-item:last-child { border-bottom:none; }
+.holding-ticker { font-size:17px; font-weight:800; font-family:var(--font-mono); color:var(--text); }
+.holding-shares { font-size:12px; color:var(--text3); margin-top:2px; }
+.holding-value { text-align:right; }
+.holding-eur { font-family:var(--font-mono); font-weight:700; font-size:15px; }
+.holding-avg { font-size:11px; color:var(--text3); margin-top:2px; }
+
+/* ===== HISTORY LIST ===== */
+.tx-item {
+  background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius2);
+  padding:14px; margin-bottom:10px;
+}
+.tx-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.tx-badge {
+  font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px;
+  padding:3px 8px; border-radius:20px;
+}
+.tx-badge.buy { background:rgba(16,185,129,0.15); color:var(--green2); }
+.tx-badge.sell { background:rgba(239,68,68,0.15); color:var(--red2); }
+.tx-ticker { font-size:16px; font-weight:800; font-family:var(--font-mono); }
+.tx-date { font-size:12px; color:var(--text3); }
+.tx-details { display:flex; gap:16px; flex-wrap:wrap; }
+.tx-detail { font-size:12px; color:var(--text3); }
+.tx-detail span { color:var(--text2); font-weight:600; }
+.tx-actions { display:flex; gap:8px; margin-top:10px; }
+.tx-profit { font-family:var(--font-mono); font-size:13px; font-weight:700; }
+.tx-profit.pos { color:var(--green2); }
+.tx-profit.neg { color:var(--red2); }
+
+/* ===== SEARCH ===== */
+.search-wrap { position:relative; margin-bottom:16px; }
+.search-wrap svg { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text3); width:16px; height:16px; }
+.search-input { padding-left:38px !important; }
+
+/* ===== MODAL ===== */
+.modal-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7);
+  backdrop-filter:blur(4px); z-index:200; align-items:flex-end; justify-content:center;
+}
+.modal-overlay.open { display:flex; }
+.modal {
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius) var(--radius) 0 0;
+  width:100%; max-width:900px; max-height:90dvh; overflow-y:auto;
+  padding:24px 20px calc(20px + var(--safe-bottom));
+  animation:slideUp 0.25s ease;
+}
+@keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+.modal-title { font-size:20px; font-weight:800; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; }
+
+/* ===== CHART ===== */
+.chart-wrap { position:relative; width:100%; max-width:280px; margin:0 auto; }
+
+/* ===== REPORT TABLE ===== */
+.report-table { width:100%; border-collapse:collapse; font-size:12px; }
+.report-table th { background:var(--bg4); color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; padding:10px 8px; text-align:left; font-size:10px; }
+.report-table td { padding:10px 8px; border-bottom:1px solid var(--border); color:var(--text2); font-family:var(--font-mono); font-size:11px; }
+.report-table tr:last-child td { border-bottom:none; }
+.report-table .profit-pos { color:var(--green2); }
+.report-table .profit-neg { color:var(--red2); }
+
+/* ===== TOAST ===== */
+#toast-container { position:fixed; top:20px; right:16px; left:16px; z-index:999; pointer-events:none; max-width:400px; margin:0 auto; }
+.toast {
+  background:var(--bg4); border:1px solid var(--border2); border-radius:var(--radius2);
+  padding:12px 16px; margin-bottom:8px; display:flex; align-items:center; gap:10px;
+  font-size:13px; font-weight:600; box-shadow:0 8px 30px rgba(0,0,0,0.5);
+  animation:toastIn 0.3s ease; pointer-events:auto;
+}
+.toast.success { border-left:3px solid var(--green); }
+.toast.error { border-left:3px solid var(--red); }
+.toast.info { border-left:3px solid var(--accent); }
+@keyframes toastIn { from{opacity:0;transform:translateY(-12px)} to{opacity:1;transform:translateY(0)} }
+@keyframes toastOut { from{opacity:1} to{opacity:0;transform:translateY(-8px)} }
+
+/* ===== EMPTY STATE ===== */
+.empty-state { text-align:center; padding:48px 20px; color:var(--text3); }
+.empty-state svg { width:48px; height:48px; margin-bottom:16px; opacity:0.4; }
+.empty-state h3 { font-size:16px; margin-bottom:8px; color:var(--text2); }
+
+/* ===== SETTINGS ===== */
+.setting-row { display:flex; align-items:center; justify-content:space-between; padding:16px 0; border-bottom:1px solid var(--border); }
+.setting-row:last-child { border-bottom:none; }
+.setting-label { font-size:14px; font-weight:600; color:var(--text); }
+.setting-sub { font-size:12px; color:var(--text3); margin-top:2px; }
+.setting-input { background:var(--bg3); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--font-mono); font-size:14px; padding:8px 12px; width:120px; text-align:right; outline:none; }
+.setting-input:focus { border-color:var(--accent); }
+
+/* ===== LEGEND ===== */
+.chart-legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; justify-content:center; }
+.legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text2); }
+.legend-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+/* ===== FOLDABLE OPTIMIZATIONS ===== */
+@media (min-width: 600px) {
+  .form-row { grid-template-columns:1fr 1fr 1fr; }
+  .stats-grid { grid-template-columns:1fr 1fr 1fr 1fr; }
+  .stat-card.wide { grid-column: auto; }
+  .page { padding: 24px 24px calc(var(--nav-h) + 24px); }
+}
+
+@media (min-width: 768px) {
+  .nav-btn span { font-size:11px; }
+  .page-title { font-size:32px; }
+}
+
+/* ===== INLINE TICKER BADGE ===== */
+.ticker-tag { 
+  display:inline-flex; align-items:center; 
+  background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.2);
+  border-radius:6px; padding:2px 8px; font-family:var(--font-mono); font-size:12px; color:var(--accent2);
+}
+
+/* ===== FIFO indicator ===== */
+.fifo-info {
+  background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2);
+  border-radius:8px; padding:10px 12px; font-size:12px; color:var(--yellow); margin-top:8px;
+}
+
+/* Report tax summary */
+.tax-summary-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+.tax-card { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius2); padding:14px; }
+.tax-card-label { font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:var(--text3); margin-bottom:6px; font-weight:700; }
+.tax-card-value { font-family:var(--font-mono); font-size:18px; font-weight:800; }
+
+/* Overflow table wrapper */
+.table-scroll { overflow-x:auto; margin:0 -4px; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+<!-- ===== PAGES ===== -->
+
+<!-- DASHBOARD -->
+<div id="page-dashboard" class="page active">
+  <div class="page-header">
+    <div>
+      <div class="page-title">My Stocks</div>
+      <div class="page-subtitle" id="dash-date"></div>
+    </div>
+    <button class="btn btn-ghost btn-sm btn-icon" onclick="refreshDashboard()" title="Refresh">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Invested</div>
+      <div class="stat-value accent" id="dash-invested">€0.00</div>
+      <div class="stat-sub">Total cost in EUR</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Holdings</div>
+      <div class="stat-value" id="dash-holdings">0</div>
+      <div class="stat-sub">Active tickers</div>
+    </div>
+  </div>
+
+  <!-- Cost Breakdown -->
+  <div class="card">
+    <div class="card-label" style="margin-bottom:4px">Cost Breakdown</div>
+    <div id="cost-breakdown-rows">
+      <div class="breakdown-row">
+        <span class="breakdown-label"><span>📈</span> Share Purchases</span>
+        <span class="breakdown-value" id="bd-purchases">€0.00</span>
+      </div>
+      <div class="breakdown-row clickable-row" onclick="showDetailModal('fees')">
+        <span class="breakdown-label" style="color:var(--yellow)"><span>💰</span> Brokerage Fees <span style="font-size:10px;color:var(--text3)">(tap)</span></span>
+        <span class="breakdown-value" id="bd-fees">€0.00</span>
+      </div>
+      <div class="breakdown-row clickable-row" onclick="showDetailModal('taxes')">
+        <span class="breakdown-label" style="color:var(--red2)"><span>🏛️</span> Taxes <span style="font-size:10px;color:var(--text3)">(tap)</span></span>
+        <span class="breakdown-value" id="bd-taxes">€0.00</span>
+      </div>
+      <div class="breakdown-row">
+        <span class="breakdown-label" style="color:var(--text);font-weight:700">Grand Total</span>
+        <span class="breakdown-value" style="color:var(--accent2);font-size:16px" id="bd-total">€0.00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Allocation Chart -->
+  <div class="card">
+    <div class="card-label" style="margin-bottom:16px">Portfolio Allocation</div>
+    <div class="chart-wrap">
+      <canvas id="allocation-chart" height="260"></canvas>
+    </div>
+    <div class="chart-legend" id="chart-legend"></div>
+  </div>
+</div>
+
+<!-- TRANSACTIONS -->
+<div id="page-transactions" class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title" id="tx-page-title">Buy</div>
+      <div class="page-subtitle">Record a transaction</div>
+    </div>
+  </div>
+
+  <div class="tab-toggle">
+    <button class="tab-btn active" id="tab-buy" onclick="setTxTab('buy')">📈 Buy</button>
+    <button class="tab-btn" id="tab-sell" onclick="setTxTab('sell')">📉 Sell</button>
+  </div>
+
+  <!-- BUY FORM -->
+  <div id="buy-form-wrap" class="card">
+    <form id="buy-form" onsubmit="submitBuy(event)">
+      <div class="form-group">
+        <label class="form-label">Ticker / Symbol</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="buy-ticker-select" class="form-select" onchange="handleTickerSelect('buy')" style="flex:1">
+            <option value="">-- Select or add new --</option>
+            <option value="NEW">＋ Add new ticker</option>
+          </select>
+        </div>
+        <div id="buy-ticker-new-wrap" style="display:none;margin-top:8px">
+          <input type="text" id="buy-ticker-new" class="form-input" placeholder="e.g. AAPL" style="text-transform:uppercase">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Shares</label>
+          <input type="number" id="buy-shares" class="form-input" placeholder="0" step="any" min="0.0001" oninput="updateBuyBreakdown()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Price / Share</label>
+          <input type="number" id="buy-price" class="form-input" placeholder="0.00" step="any" min="0" oninput="updateBuyBreakdown()">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Currency</label>
+          <select id="buy-currency" class="form-select" onchange="updateBuyBreakdown()">
+            <option value="EUR">EUR €</option>
+            <option value="USD" selected>USD $</option>
+            <option value="GBP">GBP £</option>
+            <option value="CHF">CHF ₣</option>
+            <option value="JPY">JPY ¥</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Exchange Rate</label>
+          <input type="number" id="buy-rate" class="form-input" placeholder="1.0" step="any" min="0.0001" value="1.173616" oninput="updateBuyBreakdown()">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:-10px;margin-bottom:12px">1 EUR = <span id="buy-rate-label">1.1736 USD</span> &nbsp;·&nbsp; Enter rate as 1 EUR = X [currency]</div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Brokerage Fee</label>
+          <input type="number" id="buy-fee" class="form-input" placeholder="0.00" step="any" min="0" value="0" oninput="updateBuyBreakdown()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Taxes</label>
+          <input type="number" id="buy-tax" class="form-input" placeholder="0.00" step="any" min="0" value="0" oninput="updateBuyBreakdown()">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:-10px;margin-bottom:12px">Fee & taxes in the transaction currency</div>
+
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input type="date" id="buy-date" class="form-input">
+      </div>
+
+      <!-- Live breakdown -->
+      <div class="live-breakdown">
+        <div class="lb-row"><span class="lb-label">Subtotal</span><span class="lb-value" id="lb-subtotal">—</span></div>
+        <div class="lb-row"><span class="lb-label">+ Brokerage Fee</span><span class="lb-value" id="lb-fee">—</span></div>
+        <div class="lb-row"><span class="lb-label">+ Taxes</span><span class="lb-value" id="lb-tax">—</span></div>
+        <div class="lb-row"><span class="lb-label">Total (local)</span><span class="lb-value" id="lb-total-local">—</span></div>
+        <div class="lb-row"><span class="lb-label">÷ Exchange Rate</span><span class="lb-value" id="lb-rate">—</span></div>
+        <div class="lb-row lb-total"><span class="lb-label" style="color:var(--text);font-size:14px">Total in EUR</span><span class="lb-value" id="lb-eur">—</span></div>
+      </div>
+
+      <button type="submit" class="btn btn-success btn-full" style="margin-top:16px">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Record Purchase
+      </button>
+    </form>
+  </div>
+
+  <!-- SELL FORM -->
+  <div id="sell-form-wrap" class="card" style="display:none">
+    <form id="sell-form" onsubmit="submitSell(event)">
+      <div class="form-group">
+        <label class="form-label">Ticker to Sell</label>
+        <select id="sell-ticker" class="form-select" onchange="updateSellInfo()">
+          <option value="">-- Select ticker --</option>
+        </select>
+        <div id="sell-avail" class="fifo-info" style="display:none">
+          FIFO: Available <span id="sell-avail-shares">0</span> shares · Avg cost <span id="sell-avail-avg">€0.00</span>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Shares to Sell</label>
+          <input type="number" id="sell-shares" class="form-input" placeholder="0" step="any" min="0.0001" oninput="updateSellBreakdown()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sell Price / Share</label>
+          <input type="number" id="sell-price" class="form-input" placeholder="0.00" step="any" min="0" oninput="updateSellBreakdown()">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Currency</label>
+          <select id="sell-currency" class="form-select" onchange="updateSellBreakdown()">
+            <option value="EUR">EUR €</option>
+            <option value="USD" selected>USD $</option>
+            <option value="GBP">GBP £</option>
+            <option value="CHF">CHF ₣</option>
+            <option value="JPY">JPY ¥</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Exchange Rate</label>
+          <input type="number" id="sell-rate" class="form-input" placeholder="1.0" step="any" min="0.0001" value="1.173616" oninput="updateSellBreakdown()">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Sell Fees</label>
+          <input type="number" id="sell-fee" class="form-input" placeholder="0.00" step="any" min="0" value="0" oninput="updateSellBreakdown()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Sell Taxes</label>
+          <input type="number" id="sell-tax" class="form-input" placeholder="0.00" step="any" min="0" value="0" oninput="updateSellBreakdown()">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input type="date" id="sell-date" class="form-input">
+      </div>
+
+      <div class="live-breakdown">
+        <div class="lb-row"><span class="lb-label">Gross Proceeds</span><span class="lb-value" id="slb-gross">—</span></div>
+        <div class="lb-row"><span class="lb-label">− Fees & Taxes</span><span class="lb-value" id="slb-fees">—</span></div>
+        <div class="lb-row"><span class="lb-label">Net Proceeds (EUR)</span><span class="lb-value" id="slb-net">—</span></div>
+        <div class="lb-row"><span class="lb-label">FIFO Cost Basis (EUR)</span><span class="lb-value" id="slb-basis">—</span></div>
+        <div class="lb-row lb-total"><span class="lb-label" style="color:var(--text);font-size:14px">Est. Profit / Loss</span><span class="lb-value" id="slb-profit" style="color:var(--green2)">—</span></div>
+      </div>
+
+      <button type="submit" class="btn btn-danger btn-full" style="margin-top:16px">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Record Sale
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- HOLDINGS -->
+<div id="page-holdings" class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Holdings</div>
+      <div class="page-subtitle">Current portfolio</div>
+    </div>
+  </div>
+  <div class="card" id="holdings-list">
+    <div class="empty-state">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+      <h3>No holdings yet</h3>
+      <p>Record a buy transaction to get started</p>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div id="page-history" class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">History</div>
+      <div class="page-subtitle">All transactions</div>
+    </div>
+    <button class="btn btn-ghost btn-sm btn-icon" onclick="loadHistory()" title="Refresh">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+    </button>
+  </div>
+  <div class="search-wrap">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" id="history-search" class="form-input search-input" placeholder="Search ticker, date…" oninput="filterHistory()">
+  </div>
+  <div id="history-list"></div>
+</div>
+
+<!-- REPORT -->
+<div id="page-report" class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Tax Report</div>
+      <div class="page-subtitle">Belgian capital gains</div>
+    </div>
+  </div>
+
+  <div class="card card-sm" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <div style="flex:1;min-width:120px">
+      <label class="form-label">Tax Year</label>
+      <select id="report-year" class="form-select" onchange="loadReport()"></select>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="exportReportCSV()" style="margin-top:18px">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export CSV
+    </button>
+  </div>
+
+  <div id="report-content"></div>
+</div>
+
+<!-- SETTINGS -->
+<div id="page-settings" class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Settings</div>
+      <div class="page-subtitle">Preferences & data</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label" style="margin-bottom:4px">Tax Configuration</div>
+
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Home Currency</div>
+        <div class="setting-sub">Base currency for all calculations</div>
+      </div>
+      <select id="s-home-currency" class="setting-input" style="width:80px" onchange="saveSettings()">
+        <option value="EUR">EUR</option>
+        <option value="GBP">GBP</option>
+        <option value="CHF">CHF</option>
+        <option value="USD">USD</option>
+      </select>
+    </div>
+
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Belgian CGT Rate (%)</div>
+        <div class="setting-sub">Capital gains tax rate</div>
+      </div>
+      <input type="number" id="s-cgt-rate" class="setting-input" value="10" step="0.1" min="0" onchange="saveSettings()">
+    </div>
+
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Yearly Exemption (€)</div>
+        <div class="setting-sub">Tax-free threshold per year</div>
+      </div>
+      <input type="number" id="s-exemption" class="setting-input" value="10000" step="100" onchange="saveSettings()">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label" style="margin-bottom:4px">Data Management</div>
+
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Export Backup</div>
+        <div class="setting-sub">Download all data as JSON</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="exportBackup()">Export</button>
+    </div>
+
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Import Backup</div>
+        <div class="setting-sub">Restore from JSON file</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('import-file').click()">Import</button>
+    </div>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importBackup(event)">
+
+    <div class="setting-row">
+      <div>
+        <div class="setting-label" style="color:var(--red2)">Clear All Data</div>
+        <div class="setting-sub">Permanently delete everything</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="clearAllData()">Clear</button>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">
+    My Stocks v1.0 · Offline-first PWA · Data stored locally
+  </div>
+</div>
+
+<!-- ===== BOTTOM NAV ===== -->
+<nav id="bottom-nav">
+  <div class="nav-inner">
+    <button class="nav-btn active" id="nav-dashboard" onclick="navigate('dashboard')">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <span>Dashboard</span>
+    </button>
+    <button class="nav-btn" id="nav-transactions" onclick="navigate('transactions')">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+      <span>Trade</span>
+    </button>
+    <button class="nav-btn" id="nav-holdings" onclick="navigate('holdings')">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+      <span>Holdings</span>
+    </button>
+    <button class="nav-btn" id="nav-history" onclick="navigate('history')">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 0 .5-4.5"/><polyline points="3 3 3 7 7 7"/></svg>
+      <span>History</span>
+    </button>
+    <button class="nav-btn" id="nav-report" onclick="navigate('report')">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      <span>Report</span>
+    </button>
+    <button class="nav-btn" id="nav-settings" onclick="navigate('settings')">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span>Settings</span>
+    </button>
+  </div>
+</nav>
+
+</div><!-- #app -->
+
+<!-- ===== MODALS ===== -->
+<div id="detail-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="detail-modal-title">Details</span>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeModal('detail-modal')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="detail-modal-content"></div>
+  </div>
+</div>
+
+<div id="edit-modal" class="modal-overlay">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="edit-modal-title">Edit Transaction</span>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="closeModal('edit-modal')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="edit-modal-content"></div>
+  </div>
+</div>
+
+<!-- ===== TOAST CONTAINER ===== -->
+<div id="toast-container"></div>
+
+<!-- ===== SERVICE WORKER REG ===== -->
+<script>
+if ('serviceWorker' in navigator) {
+  const swCode = `
+const CACHE = 'mystocks-v1';
+const ASSETS = ['/'];
+self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{})));
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => {
+    const clone = res.clone();
+    caches.open(CACHE).then(c => c.put(e.request, clone));
+    return res;
+  }).catch(() => caches.match('/'))));
+});
+`;
+  const blob = new Blob([swCode], {type: 'application/javascript'});
+  const swUrl = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swUrl).catch(()=>{});
+}
+</script>
+
+<!-- ===== MANIFEST INJECTION ===== -->
+<script>
+const manifest = {
+  name: "My Stocks",
+  short_name: "MyStocks",
+  description: "Personal stock purchase & capital gains tracker",
+  start_url: "./",
+  display: "standalone",
+  background_color: "#080d1a",
+  theme_color: "#0a0f1e",
+  icons: [
+    { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230d1425'/%3E%3Cpolyline points='15,70 35,45 55,55 80,25' stroke='%2360a5fa' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E", sizes: "192x192", type: "image/svg+xml" },
+    { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230d1425'/%3E%3Cpolyline points='15,70 35,45 55,55 80,25' stroke='%2360a5fa' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E", sizes: "512x512", type: "image/svg+xml" }
+  ]
+};
+const mlink = document.createElement('link');
+mlink.rel = 'manifest';
+mlink.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(manifest));
+document.head.appendChild(mlink);
+</script>
+
+<!-- ===== MAIN APP SCRIPT ===== -->
+<script>
+// ======================================================
+//  DATABASE (Dexie.js / IndexedDB)
+// ======================================================
+// Delete and recreate DB if schema is broken (handles stale IDB state)
+async function openDB() {
+  // Try opening normally first
+  try {
+    const db = new Dexie('MyStocksDB');
+    // Declare version 1 (old) so Dexie knows how to upgrade from it
+    db.version(1).stores({
+      purchases: '++id, ticker, date',
+      sales:     '++id, ticker, date',
+      settings:  'key'
+    });
+    // Version 2 - same schema, just ensures the upgrade path exists
+    db.version(2).stores({
+      purchases: '++id, ticker, date',
+      sales:     '++id, ticker, date',
+      settings:  'key'
+    });
+    await db.open();
+    console.log('DB opened OK, version:', db.verno);
+    return db;
+  } catch(err) {
+    // Schema mismatch or corrupt DB - wipe and recreate clean
+    console.warn('DB open failed (' + err.message + '), wiping and recreating...');
+    try { await Dexie.delete('MyStocksDB'); } catch(e) {}
+    const db2 = new Dexie('MyStocksDB');
+    db2.version(2).stores({
+      purchases: '++id, ticker, date',
+      sales:     '++id, ticker, date',
+      settings:  'key'
+    });
+    await db2.open();
+    console.log('DB recreated OK');
+    return db2;
+  }
+}
+let db; // initialized in init()
+
+// ======================================================
+//  SETTINGS
+// ======================================================
+let appSettings = {
+  homeCurrency: 'EUR',
+  cgtRate: 10,
+  exemption: 10000
+};
+
+async function loadSettings() {
+  const rows = await db.settings.toArray();
+  rows.forEach(r => { if (r.key in appSettings) appSettings[r.key] = r.value; });
+  document.getElementById('s-home-currency').value = appSettings.homeCurrency;
+  document.getElementById('s-cgt-rate').value = appSettings.cgtRate;
+  document.getElementById('s-exemption').value = appSettings.exemption;
+}
+
+async function saveSettings() {
+  appSettings.homeCurrency = document.getElementById('s-home-currency').value;
+  appSettings.cgtRate = parseFloat(document.getElementById('s-cgt-rate').value) || 10;
+  appSettings.exemption = parseFloat(document.getElementById('s-exemption').value) || 10000;
+  await db.settings.bulkPut([
+    {key:'homeCurrency', value: appSettings.homeCurrency},
+    {key:'cgtRate', value: appSettings.cgtRate},
+    {key:'exemption', value: appSettings.exemption}
+  ]);
+  showToast('Settings saved', 'success');
+}
+
+// ======================================================
+//  NAVIGATION
+// ======================================================
+let currentPage = 'dashboard';
+
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.getElementById('nav-' + page).classList.add('active');
+  currentPage = page;
+  if (page === 'dashboard') refreshDashboard();
+  if (page === 'holdings') loadHoldings();
+  if (page === 'history') loadHistory();
+  if (page === 'report') initReport();
+  if (page === 'transactions') refreshTickerDropdowns();
+}
+
+// ======================================================
+//  TOAST
+// ======================================================
+function showToast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const icons = { success:'✓', error:'✕', info:'ℹ' };
+  el.innerHTML = `<span style="font-size:14px">${icons[type]||'ℹ'}</span><span>${msg}</span>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => { el.style.animation = 'toastOut 0.3s ease forwards'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+
+// ======================================================
+//  FORMAT HELPERS
+// ======================================================
+const fmt = (v, decimals=2) => isNaN(v) ? '—' : '€' + v.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const fmtN = (v, dec=2) => isNaN(v) ? '—' : v.toFixed(dec).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const fmtCur = (v, cur='EUR', dec=2) => {
+  const s = {EUR:'€', USD:'$', GBP:'£', CHF:'₣', JPY:'¥'};
+  return (s[cur]||cur) + fmtN(v, cur==='JPY'?0:dec);
+};
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '—';
+
+// ======================================================
+//  DASHBOARD
+// ======================================================
+let allocationChart = null;
+const CHART_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16'];
+
+async function refreshDashboard() {
+  const purchases = await db.purchases.toArray();
+  // dash date
+  document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  // Compute per ticker remaining
+  const holdings = await computeHoldings(purchases);
+
+  let totalPurchases = 0, totalFees = 0, totalTaxes = 0;
+  purchases.forEach(p => {
+    totalPurchases += p.sharesRemaining > 0 || true ? (p.shares * p.price / p.rate) : 0;
+    // include all buys in breakdown even sold ones
+    totalFees += (p.fee || 0) / p.rate;
+    totalTaxes += (p.tax || 0) / p.rate;
+  });
+  // Recalculate purchases as pure share cost
+  totalPurchases = purchases.reduce((s,p) => s + (p.shares * p.price / p.rate), 0);
+  const grandTotal = totalPurchases + totalFees + totalTaxes;
+
+  document.getElementById('dash-invested').textContent = fmt(grandTotal);
+  document.getElementById('dash-holdings').textContent = Object.keys(holdings).filter(t => holdings[t].shares > 0.00001).length;
+  document.getElementById('bd-purchases').textContent = fmt(totalPurchases);
+  document.getElementById('bd-fees').textContent = fmt(totalFees);
+  document.getElementById('bd-taxes').textContent = fmt(totalTaxes);
+  document.getElementById('bd-total').textContent = fmt(grandTotal);
+
+  // Chart
+  const tickers = Object.keys(holdings).filter(t => holdings[t].shares > 0.00001);
+  const values = tickers.map(t => holdings[t].costEur);
+  const total = values.reduce((a,b) => a+b, 0);
+
+  if (allocationChart) { allocationChart.destroy(); allocationChart = null; }
+
+  if (tickers.length === 0) {
+    document.getElementById('chart-legend').innerHTML = '<span style="color:var(--text3);font-size:13px">No holdings yet</span>';
+    return;
+  }
+
+  const ctx = document.getElementById('allocation-chart').getContext('2d');
+  allocationChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: tickers,
+      datasets: [{
+        data: values,
+        backgroundColor: CHART_COLORS.slice(0, tickers.length),
+        borderColor: 'transparent',
+        borderWidth: 0,
+        hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '65%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${fmt(ctx.parsed)} (${((ctx.parsed/total)*100).toFixed(1)}%)`
+          }
+        }
+      }
+    }
+  });
+
+  const legend = document.getElementById('chart-legend');
+  legend.innerHTML = tickers.map((t,i) =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${CHART_COLORS[i]}"></div><span>${t} ${((values[i]/total)*100).toFixed(0)}%</span></div>`
+  ).join('');
+}
+
+async function showDetailModal(type) {
+  const purchases = await db.purchases.toArray();
+  const title = type === 'fees' ? 'Brokerage Fees' : 'Taxes';
+  document.getElementById('detail-modal-title').textContent = title;
+  let rows = purchases.filter(p => type === 'fees' ? (p.fee||0)>0 : (p.tax||0)>0);
+  if (rows.length === 0) {
+    document.getElementById('detail-modal-content').innerHTML = '<div class="empty-state"><h3>No entries</h3></div>';
+  } else {
+    const html = rows.map(p => {
+      const val = type==='fees' ? p.fee : p.tax;
+      const valEur = val / p.rate;
+      return `<div class="tx-item" style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><span class="ticker-tag">${p.ticker}</span> <span style="font-size:12px;color:var(--text3);margin-left:8px">${fmtDate(p.date)}</span></div>
+          <div style="text-align:right">
+            <div style="font-family:var(--font-mono);font-weight:700">${fmt(valEur)}</div>
+            <div style="font-size:11px;color:var(--text3)">${fmtCur(val, p.currency)}</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    document.getElementById('detail-modal-content').innerHTML = html;
+  }
+  openModal('detail-modal');
+}
+
+// ======================================================
+//  COMPUTE HOLDINGS (FIFO-aware)
+// ======================================================
+async function computeHoldings(purchases) {
+  if (!purchases) purchases = await db.purchases.toArray();
+  const map = {};
+  purchases.sort((a,b) => new Date(a.date)-new Date(b.date));
+  purchases.forEach(p => {
+    if (!map[p.ticker]) map[p.ticker] = { shares:0, costEur:0, lots:[] };
+    const remaining = p.sharesRemaining !== undefined ? p.sharesRemaining : p.shares;
+    if (remaining > 0.00001) {
+      map[p.ticker].shares += remaining;
+      const costPerShare = (p.price / p.rate) * (1 + (p.fee+p.tax)/(p.shares*p.price));
+      map[p.ticker].costEur += remaining * (p.price / p.rate);
+    }
+  });
+  return map;
+}
+
+// ======================================================
+//  TICKER DROPDOWN MANAGEMENT
+// ======================================================
+async function getUniqueTickers() {
+  const purchases = await db.purchases.toArray();
+  return [...new Set(purchases.map(p => p.ticker))].sort();
+}
+
+async function refreshTickerDropdowns() {
+  const tickers = await getUniqueTickers();
+  // buy dropdown
+  const buySelect = document.getElementById('buy-ticker-select');
+  const buyVal = buySelect.value;
+  buySelect.innerHTML = '<option value="">-- Select or add new --</option><option value="NEW">＋ Add new ticker</option>';
+  tickers.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t; o.textContent = t;
+    buySelect.appendChild(o);
+  });
+  buySelect.value = buyVal || '';
+
+  // sell dropdown - only tickers with remaining shares
+  const purchases = await db.purchases.toArray();
+  const holdings = await computeHoldings(purchases);
+  const sellSelect = document.getElementById('sell-ticker');
+  const sellVal = sellSelect.value;
+  sellSelect.innerHTML = '<option value="">-- Select ticker --</option>';
+  Object.keys(holdings).filter(t => holdings[t].shares > 0.00001).sort().forEach(t => {
+    const o = document.createElement('option');
+    o.value = t; o.textContent = `${t} (${fmtN(holdings[t].shares)} shares)`;
+    sellSelect.appendChild(o);
+  });
+  sellSelect.value = sellVal || '';
+}
+
+function handleTickerSelect(form) {
+  const sel = document.getElementById(`${form}-ticker-select`);
+  const newWrap = document.getElementById(`${form}-ticker-new-wrap`);
+  newWrap.style.display = sel.value === 'NEW' ? 'block' : 'none';
+}
+
+// ======================================================
+//  BUY FORM LIVE BREAKDOWN
+// ======================================================
+function updateBuyBreakdown() {
+  const shares = parseFloat(document.getElementById('buy-shares').value) || 0;
+  const price = parseFloat(document.getElementById('buy-price').value) || 0;
+  const currency = document.getElementById('buy-currency').value;
+  const rate = parseFloat(document.getElementById('buy-rate').value) || 1;
+  const fee = parseFloat(document.getElementById('buy-fee').value) || 0;
+  const tax = parseFloat(document.getElementById('buy-tax').value) || 0;
+
+  const sub = shares * price;
+  const totalLocal = sub + fee + tax;
+  const totalEur = totalLocal / rate;
+
+  document.getElementById('buy-rate-label').textContent = `${rate.toFixed(4)} ${currency}`;
+  document.getElementById('lb-subtotal').textContent = fmtCur(sub, currency);
+  document.getElementById('lb-fee').textContent = fmtCur(fee, currency);
+  document.getElementById('lb-tax').textContent = fmtCur(tax, currency);
+  document.getElementById('lb-total-local').textContent = fmtCur(totalLocal, currency);
+  document.getElementById('lb-rate').textContent = `${rate.toFixed(4)}`;
+  document.getElementById('lb-eur').textContent = fmt(totalEur);
+}
+
+// ======================================================
+//  SUBMIT BUY
+// ======================================================
+async function submitBuy(e) {
+  e.preventDefault();
+  try {
+    const sel = document.getElementById('buy-ticker-select');
+    let ticker = '';
+    if (sel.value === 'NEW') {
+      ticker = (document.getElementById('buy-ticker-new').value || '').trim().toUpperCase();
+    } else {
+      ticker = sel.value.trim().toUpperCase();
+    }
+    if (!ticker) { showToast('Please select or enter a ticker symbol', 'error'); return; }
+
+    const sharesRaw = document.getElementById('buy-shares').value;
+    const priceRaw  = document.getElementById('buy-price').value;
+    const date      = document.getElementById('buy-date').value;
+    const shares    = parseFloat(sharesRaw);
+    const price     = parseFloat(priceRaw);
+
+    if (!sharesRaw || isNaN(shares) || shares <= 0) { showToast('Enter a valid number of shares', 'error'); return; }
+    if (!priceRaw  || isNaN(price)  || price  <= 0) { showToast('Enter a valid price per share', 'error'); return; }
+    if (!date) { showToast('Please select a date', 'error'); return; }
+
+    const currency = document.getElementById('buy-currency').value;
+    const rate     = parseFloat(document.getElementById('buy-rate').value) || 1;
+    const fee      = parseFloat(document.getElementById('buy-fee').value)  || 0;
+    const tax      = parseFloat(document.getElementById('buy-tax').value)  || 0;
+
+    await db.purchases.add({
+      ticker, shares, price, currency, rate, fee, tax, date,
+      sharesRemaining: shares,
+      createdAt: Date.now()
+    });
+
+    showToast(`✓ Bought ${fmtN(shares)} × ${ticker} recorded!`, 'success');
+
+    // Reset form — manually restore all defaults so nothing breaks
+    document.getElementById('buy-ticker-select').value = '';
+    document.getElementById('buy-ticker-new').value = '';
+    document.getElementById('buy-ticker-new-wrap').style.display = 'none';
+    document.getElementById('buy-shares').value = '';
+    document.getElementById('buy-price').value = '';
+    document.getElementById('buy-currency').value = 'USD';
+    document.getElementById('buy-rate').value = '1.173616';
+    document.getElementById('buy-fee').value = '0';
+    document.getElementById('buy-tax').value = '0';
+    document.getElementById('buy-date').value = new Date().toISOString().split('T')[0];
+    updateBuyBreakdown();
+    refreshTickerDropdowns();
+  } catch (err) {
+    console.error('submitBuy error:', err);
+    showToast('Error saving purchase: ' + (err.message || err), 'error');
+  }
+}
+
+// ======================================================
+//  SELL FORM LOGIC
+// ======================================================
+async function updateSellInfo() {
+  const ticker = document.getElementById('sell-ticker').value;
+  const avail = document.getElementById('sell-avail');
+  if (!ticker) { avail.style.display='none'; return; }
+  const lots = await db.purchases.where('ticker').equals(ticker).sortBy('date');
+  const remaining = lots.reduce((s,l) => s+(l.sharesRemaining||0), 0);
+  const costEur = lots.reduce((s,l) => s+(l.sharesRemaining||0)*(l.price/l.rate), 0);
+  const avg = remaining > 0 ? costEur/remaining : 0;
+  document.getElementById('sell-avail-shares').textContent = fmtN(remaining);
+  document.getElementById('sell-avail-avg').textContent = fmt(avg) + '/share';
+  avail.style.display = 'block';
+  updateSellBreakdown();
+}
+
+async function updateSellBreakdown() {
+  const ticker = document.getElementById('sell-ticker').value;
+  const sharesToSell = parseFloat(document.getElementById('sell-shares').value) || 0;
+  const sellPrice = parseFloat(document.getElementById('sell-price').value) || 0;
+  const currency = document.getElementById('sell-currency').value;
+  const rate = parseFloat(document.getElementById('sell-rate').value) || 1;
+  const fee = parseFloat(document.getElementById('sell-fee').value) || 0;
+  const tax = parseFloat(document.getElementById('sell-tax').value) || 0;
+
+  const grossLocal = sharesToSell * sellPrice;
+  const netLocal = grossLocal - fee - tax;
+  const netEur = netLocal / rate;
+
+  // FIFO cost basis estimate
+  let basis = 0;
+  if (ticker && sharesToSell > 0) {
+    const lots = await db.purchases.where('ticker').equals(ticker).sortBy('date');
+    let remaining = sharesToSell;
+    for (const lot of lots) {
+      if (remaining <= 0) break;
+      const take = Math.min(remaining, lot.sharesRemaining||0);
+      basis += take * (lot.price / lot.rate);
+      remaining -= take;
+    }
+  }
+  const profit = netEur - basis;
+
+  document.getElementById('slb-gross').textContent = fmtCur(grossLocal, currency);
+  document.getElementById('slb-fees').textContent = fmtCur(fee+tax, currency);
+  document.getElementById('slb-net').textContent = fmt(netEur);
+  document.getElementById('slb-basis').textContent = fmt(basis);
+  const profitEl = document.getElementById('slb-profit');
+  profitEl.textContent = (profit >= 0 ? '+' : '') + fmt(profit);
+  profitEl.style.color = profit >= 0 ? 'var(--green2)' : 'var(--red2)';
+}
+
+// ======================================================
+//  SUBMIT SELL (FIFO)
+// ======================================================
+async function submitSell(e) {
+  e.preventDefault();
+  try {
+    const ticker = document.getElementById('sell-ticker').value;
+    const sharesToSell = parseFloat(document.getElementById('sell-shares').value);
+    const sellPrice = parseFloat(document.getElementById('sell-price').value);
+    const currency = document.getElementById('sell-currency').value;
+    const rate = parseFloat(document.getElementById('sell-rate').value) || 1;
+    const fee = parseFloat(document.getElementById('sell-fee').value) || 0;
+    const tax = parseFloat(document.getElementById('sell-tax').value) || 0;
+    const date = document.getElementById('sell-date').value;
+
+    if (!ticker) { showToast('Select a ticker to sell', 'error'); return; }
+    if (!sharesToSell || sharesToSell <= 0) { showToast('Enter valid shares', 'error'); return; }
+    if (!sellPrice || sellPrice <= 0) { showToast('Enter valid sell price', 'error'); return; }
+    if (!date) { showToast('Select a date', 'error'); return; }
+
+    const lots = await db.purchases.where('ticker').equals(ticker).sortBy('date');
+    const available = lots.reduce((s,l) => s+(l.sharesRemaining||0), 0);
+    if (sharesToSell > available + 0.00001) {
+      showToast('Only ' + fmtN(available) + ' shares available', 'error'); return;
+    }
+
+    let remaining = sharesToSell;
+    const matchedLots = [];
+    for (const lot of lots) {
+      if (remaining <= 0) break;
+      const take = Math.min(remaining, lot.sharesRemaining||0);
+      if (take > 0) {
+        matchedLots.push({ purchaseId: lot.id, shares: take, buyPrice: lot.price, buyCurrency: lot.currency, buyRate: lot.rate, buyDate: lot.date });
+        await db.purchases.update(lot.id, { sharesRemaining: (lot.sharesRemaining||0) - take });
+        remaining -= take;
+      }
+    }
+
+    const netEur = (sharesToSell * sellPrice - fee - tax) / rate;
+    const costBasis = matchedLots.reduce((s,l) => s + l.shares*(l.buyPrice/l.buyRate), 0);
+    const profit = netEur - costBasis;
+
+    await db.sales.add({
+      ticker, shares: sharesToSell, sellPrice, currency, rate, fee, tax, date,
+      netEur, costBasis, profit, lots: matchedLots, createdAt: Date.now()
+    });
+
+    showToast('Sold ' + fmtN(sharesToSell) + ' ' + ticker + '! ' + (profit>=0?'Profit':'Loss') + ': ' + fmt(Math.abs(profit)), profit>=0?'success':'error');
+    document.getElementById('sell-ticker').value = '';
+    document.getElementById('sell-shares').value = '';
+    document.getElementById('sell-price').value = '';
+    document.getElementById('sell-currency').value = 'USD';
+    document.getElementById('sell-rate').value = '1.173616';
+    document.getElementById('sell-fee').value = '0';
+    document.getElementById('sell-tax').value = '0';
+    document.getElementById('sell-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('sell-avail').style.display = 'none';
+    updateSellBreakdown();
+    refreshTickerDropdowns();
+  } catch(err) {
+    console.error('submitSell error:', err);
+    showToast('Error saving sale: ' + (err.message || err), 'error');
+  }
+}
+
+// ======================================================
+//  HOLDINGS
+// ======================================================
+async function loadHoldings() {
+  const purchases = await db.purchases.toArray();
+  const holdings = await computeHoldings(purchases);
+  const container = document.getElementById('holdings-list');
+  const tickers = Object.keys(holdings).filter(t => holdings[t].shares > 0.00001).sort();
+  if (tickers.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+      <h3>No holdings yet</h3><p>Record a buy transaction to get started</p></div>`;
+    return;
+  }
+  const totalCost = tickers.reduce((s,t) => s+holdings[t].costEur, 0);
+  container.innerHTML = tickers.map((t, i) => {
+    const h = holdings[t];
+    const avg = h.shares > 0 ? h.costEur/h.shares : 0;
+    const pct = totalCost > 0 ? (h.costEur/totalCost*100).toFixed(1) : 0;
+    return `<div class="holding-item">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:10px;height:10px;border-radius:50%;background:${CHART_COLORS[i%CHART_COLORS.length]}"></div>
+          <div class="holding-ticker">${t}</div>
+        </div>
+        <div class="holding-shares">${fmtN(h.shares)} shares · ${pct}%</div>
+      </div>
+      <div class="holding-value">
+        <div class="holding-eur">${fmt(h.costEur)}</div>
+        <div class="holding-avg">avg ${fmt(avg)}/sh</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ======================================================
+//  HISTORY
+// ======================================================
+let allHistory = [];
+
+async function loadHistory() {
+  const purchases = await db.purchases.toArray();
+  const sales = await db.sales.toArray();
+  purchases.forEach(p => p._type = 'buy');
+  sales.forEach(s => s._type = 'sell');
+  allHistory = [...purchases, ...sales].sort((a,b) => new Date(b.date)-new Date(a.date));
+  filterHistory();
+}
+
+function filterHistory() {
+  const q = document.getElementById('history-search').value.toLowerCase();
+  const filtered = q ? allHistory.filter(t => t.ticker.toLowerCase().includes(q) || t.date.includes(q)) : allHistory;
+  renderHistory(filtered);
+}
+
+function renderHistory(list) {
+  const container = document.getElementById('history-list');
+  if (list.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 0 .5-4.5"/><polyline points="3 3 3 7 7 7"/></svg>
+      <h3>No transactions</h3><p>Nothing to display</p></div>`;
+    return;
+  }
+  container.innerHTML = list.map(tx => {
+    if (tx._type === 'buy') {
+      const totalEur = (tx.shares*tx.price+tx.fee+tx.tax)/tx.rate;
+      return `<div class="tx-item">
+        <div class="tx-header">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="tx-badge buy">BUY</span>
+            <span class="tx-ticker">${tx.ticker}</span>
+          </div>
+          <span class="tx-date">${fmtDate(tx.date)}</span>
+        </div>
+        <div class="tx-details">
+          <div class="tx-detail">${fmtN(tx.shares)} shares</div>
+          <div class="tx-detail">@ <span>${fmtCur(tx.price,tx.currency)}</span></div>
+          <div class="tx-detail">Total: <span>${fmt(totalEur)}</span></div>
+          <div class="tx-detail">Remaining: <span>${fmtN(tx.sharesRemaining||0)}</span></div>
+        </div>
+        <div class="tx-actions">
+          <button class="btn btn-ghost btn-sm" onclick="editBuy(${tx.id})">✎ Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteBuy(${tx.id})">✕ Delete</button>
+        </div>
+      </div>`;
+    } else {
+      const profitClass = tx.profit >= 0 ? 'pos' : 'neg';
+      return `<div class="tx-item">
+        <div class="tx-header">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="tx-badge sell">SELL</span>
+            <span class="tx-ticker">${tx.ticker}</span>
+          </div>
+          <span class="tx-date">${fmtDate(tx.date)}</span>
+        </div>
+        <div class="tx-details">
+          <div class="tx-detail">${fmtN(tx.shares)} shares</div>
+          <div class="tx-detail">@ <span>${fmtCur(tx.sellPrice,tx.currency)}</span></div>
+          <div class="tx-detail">Net: <span>${fmt(tx.netEur)}</span></div>
+          <div class="tx-detail"><span class="tx-profit ${profitClass}">${tx.profit>=0?'+':''}${fmt(tx.profit)}</span></div>
+        </div>
+        <div class="tx-actions">
+          <button class="btn btn-ghost btn-sm" onclick="editSale(${tx.id})">✎ Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteSale(${tx.id})">✕ Delete</button>
+        </div>
+      </div>`;
+    }
+  }).join('');
+}
+
+// ======================================================
+//  EDIT / DELETE TRANSACTIONS
+// ======================================================
+async function editBuy(id) {
+  const p = await db.purchases.get(id);
+  if (!p) return;
+  document.getElementById('edit-modal-title').textContent = 'Edit Buy — ' + p.ticker;
+  document.getElementById('edit-modal-content').innerHTML = `
+    <form onsubmit="saveEditBuy(event, ${id})">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Shares</label><input type="number" id="eb-shares" class="form-input" value="${p.shares}" step="any" required></div>
+        <div class="form-group"><label class="form-label">Price/Share</label><input type="number" id="eb-price" class="form-input" value="${p.price}" step="any" required></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Currency</label>
+          <select id="eb-currency" class="form-select">
+            ${['EUR','USD','GBP','CHF','JPY'].map(c=>`<option ${c===p.currency?'selected':''}>${c}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Rate (1EUR=)</label><input type="number" id="eb-rate" class="form-input" value="${p.rate}" step="any" required></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fee</label><input type="number" id="eb-fee" class="form-input" value="${p.fee||0}" step="any"></div>
+        <div class="form-group"><label class="form-label">Tax</label><input type="number" id="eb-tax" class="form-input" value="${p.tax||0}" step="any"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Date</label><input type="date" id="eb-date" class="form-input" value="${p.date}" required></div>
+      <button type="submit" class="btn btn-primary btn-full" style="margin-top:12px">Save Changes</button>
+    </form>`;
+  openModal('edit-modal');
+}
+
+async function saveEditBuy(e, id) {
+  e.preventDefault();
+  const p = await db.purchases.get(id);
+  const oldShares = p.shares;
+  const newShares = parseFloat(document.getElementById('eb-shares').value);
+  const diff = newShares - oldShares;
+  const newRemaining = Math.max(0, (p.sharesRemaining||0) + diff);
+  await db.purchases.update(id, {
+    shares: newShares,
+    price: parseFloat(document.getElementById('eb-price').value),
+    currency: document.getElementById('eb-currency').value,
+    rate: parseFloat(document.getElementById('eb-rate').value)||1,
+    fee: parseFloat(document.getElementById('eb-fee').value)||0,
+    tax: parseFloat(document.getElementById('eb-tax').value)||0,
+    date: document.getElementById('eb-date').value,
+    sharesRemaining: newRemaining
+  });
+  closeModal('edit-modal');
+  showToast('Transaction updated', 'success');
+  loadHistory();
+}
+
+async function deleteBuy(id) {
+  if (!confirm('Delete this purchase? This cannot be undone.')) return;
+  await db.purchases.delete(id);
+  showToast('Purchase deleted', 'info');
+  loadHistory();
+  refreshTickerDropdowns();
+}
+
+async function editSale(id) {
+  const s = await db.sales.get(id);
+  if (!s) return;
+  document.getElementById('edit-modal-title').textContent = 'Edit Sale — ' + s.ticker;
+  document.getElementById('edit-modal-content').innerHTML = `
+    <form onsubmit="saveEditSale(event, ${id})">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Shares</label><input type="number" id="es-shares" class="form-input" value="${s.shares}" step="any" required></div>
+        <div class="form-group"><label class="form-label">Sell Price</label><input type="number" id="es-price" class="form-input" value="${s.sellPrice}" step="any" required></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Currency</label>
+          <select id="es-currency" class="form-select">
+            ${['EUR','USD','GBP','CHF','JPY'].map(c=>`<option ${c===s.currency?'selected':''}>${c}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Rate (1EUR=)</label><input type="number" id="es-rate" class="form-input" value="${s.rate}" step="any" required></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fee</label><input type="number" id="es-fee" class="form-input" value="${s.fee||0}" step="any"></div>
+        <div class="form-group"><label class="form-label">Tax</label><input type="number" id="es-tax" class="form-input" value="${s.tax||0}" step="any"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Date</label><input type="date" id="es-date" class="form-input" value="${s.date}" required></div>
+      <button type="submit" class="btn btn-primary btn-full" style="margin-top:12px">Save Changes</button>
+    </form>`;
+  openModal('edit-modal');
+}
+
+async function saveEditSale(e, id) {
+  e.preventDefault();
+  const s = await db.sales.get(id);
+  const newShares = parseFloat(document.getElementById('es-shares').value);
+  const newSellPrice = parseFloat(document.getElementById('es-price').value);
+  const currency = document.getElementById('es-currency').value;
+  const rate = parseFloat(document.getElementById('es-rate').value)||1;
+  const fee = parseFloat(document.getElementById('es-fee').value)||0;
+  const tax = parseFloat(document.getElementById('es-tax').value)||0;
+  const date = document.getElementById('es-date').value;
+  const netEur = (newShares*newSellPrice-fee-tax)/rate;
+  const profit = netEur - s.costBasis;
+  await db.sales.update(id, { shares:newShares, sellPrice:newSellPrice, currency, rate, fee, tax, date, netEur, profit });
+  closeModal('edit-modal');
+  showToast('Sale updated', 'success');
+  loadHistory();
+}
+
+async function deleteSale(id) {
+  if (!confirm('Delete this sale? Sold shares will be restored to the original lots.')) return;
+  const sale = await db.sales.get(id);
+  if (!sale) return;
+  // Restore shares to original purchase lots
+  if (sale.lots) {
+    for (const lot of sale.lots) {
+      const purchase = await db.purchases.get(lot.purchaseId);
+      if (purchase) {
+        await db.purchases.update(lot.purchaseId, { sharesRemaining: (purchase.sharesRemaining||0) + lot.shares });
+      }
+    }
+  }
+  await db.sales.delete(id);
+  showToast('Sale deleted, shares restored', 'info');
+  loadHistory();
+  refreshTickerDropdowns();
+}
+
+// ======================================================
+//  TAX REPORT
+// ======================================================
+async function initReport() {
+  const sales = await db.sales.toArray();
+  const years = [...new Set(sales.map(s => s.date.split('-')[0]))].sort().reverse();
+  const yearSelect = document.getElementById('report-year');
+  const currentYear = new Date().getFullYear().toString();
+  yearSelect.innerHTML = '';
+  const allYears = years.length ? years : [currentYear];
+  if (!allYears.includes(currentYear)) allYears.unshift(currentYear);
+  allYears.forEach(y => {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y;
+    yearSelect.appendChild(o);
+  });
+  loadReport();
+}
+
+async function loadReport() {
+  const year = document.getElementById('report-year').value;
+  const sales = await db.sales.toArray();
+  const yearSales = sales.filter(s => s.date.startsWith(year));
+
+  const totalGain = yearSales.reduce((s,x) => s+x.profit, 0);
+  const exemption = appSettings.exemption;
+  const taxable = Math.max(0, totalGain - exemption);
+  const taxDue = taxable * (appSettings.cgtRate/100);
+
+  const content = document.getElementById('report-content');
+  if (yearSales.length === 0) {
+    content.innerHTML = `<div class="card"><div class="empty-state" style="padding:24px">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <h3>No sales in ${year}</h3></div></div>`;
+    return;
+  }
+
+  content.innerHTML = `
+    <div class="tax-summary-grid">
+      <div class="tax-card">
+        <div class="tax-card-label">Realized Gains</div>
+        <div class="tax-card-value" style="color:${totalGain>=0?'var(--green2)':'var(--red2)'}">${totalGain>=0?'+':''}${fmt(totalGain)}</div>
+      </div>
+      <div class="tax-card">
+        <div class="tax-card-label">Exemption (${year})</div>
+        <div class="tax-card-value">${fmt(exemption)}</div>
+      </div>
+      <div class="tax-card">
+        <div class="tax-card-label">Taxable Amount</div>
+        <div class="tax-card-value" style="color:var(--yellow)">${fmt(taxable)}</div>
+      </div>
+      <div class="tax-card">
+        <div class="tax-card-label">Tax Due (${appSettings.cgtRate}%)</div>
+        <div class="tax-card-value" style="color:var(--red2)">${fmt(taxDue)}</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label" style="margin-bottom:12px">Lot-by-Lot Breakdown</div>
+      <div class="table-scroll">
+        <table class="report-table">
+          <thead><tr>
+            <th>Ticker</th><th>Buy Date</th><th>Buy Price</th><th>Sell Date</th><th>Sell Price</th><th>Shares</th><th>Profit</th>
+          </tr></thead>
+          <tbody>
+            ${yearSales.flatMap(s => (s.lots||[]).map(lot => {
+              const sellPerShare = s.sellPrice / s.rate;
+              const lotProfit = lot.shares * (sellPerShare - lot.buyPrice/lot.buyRate);
+              return `<tr>
+                <td><span class="ticker-tag">${s.ticker}</span></td>
+                <td>${fmtDate(lot.buyDate)}</td>
+                <td>${fmtCur(lot.buyPrice, lot.buyCurrency)}</td>
+                <td>${fmtDate(s.date)}</td>
+                <td>${fmtCur(s.sellPrice, s.currency)}</td>
+                <td>${fmtN(lot.shares)}</td>
+                <td class="${lotProfit>=0?'profit-pos':'profit-neg'}">${lotProfit>=0?'+':''}${fmt(lotProfit)}</td>
+              </tr>`;
+            })).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text3)">No lot data</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+async function exportReportCSV() {
+  const year = document.getElementById('report-year').value;
+  const sales = await db.sales.toArray();
+  const yearSales = sales.filter(s => s.date.startsWith(year));
+  if (yearSales.length === 0) { showToast('No sales to export', 'error'); return; }
+
+  const rows = [['Buy Date','Buy Price','Buy Currency','Sell Date','Sell Price','Sell Currency','Shares','Profit (EUR)']];
+  yearSales.forEach(s => {
+    (s.lots||[]).forEach(lot => {
+      const sellPerShare = s.sellPrice / s.rate;
+      const lotProfit = lot.shares * (sellPerShare - lot.buyPrice/lot.buyRate);
+      rows.push([lot.buyDate, lot.buyPrice, lot.buyCurrency, s.date, s.sellPrice, s.currency, fmtN(lot.shares,4), fmtN(lotProfit)]);
+    });
+  });
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `tax-report-${year}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV exported', 'success');
+}
+
+// ======================================================
+//  BACKUP / RESTORE / CLEAR
+// ======================================================
+async function exportBackup() {
+  const purchases = await db.purchases.toArray();
+  const sales = await db.sales.toArray();
+  const settings = await db.settings.toArray();
+  const data = JSON.stringify({ purchases, sales, settings, exportedAt: new Date().toISOString() }, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `mystocks-backup-${new Date().toISOString().split('T')[0]}.json`; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Backup exported!', 'success');
+}
+
+async function importBackup(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  try {
+    const data = JSON.parse(text);
+    if (!confirm('This will REPLACE all current data. Continue?')) return;
+    await db.purchases.clear();
+    await db.sales.clear();
+    await db.settings.clear();
+    if (data.purchases?.length) await db.purchases.bulkAdd(data.purchases);
+    if (data.sales?.length) await db.sales.bulkAdd(data.sales);
+    if (data.settings?.length) await db.settings.bulkAdd(data.settings);
+    await loadSettings();
+    showToast('Backup imported!', 'success');
+    e.target.value = '';
+  } catch(err) {
+    showToast('Invalid backup file', 'error');
+  }
+}
+
+async function clearAllData() {
+  if (!confirm('⚠️ This will permanently delete ALL your data. Are you absolutely sure?')) return;
+  if (!confirm('Last warning: all purchases, sales and settings will be lost forever!')) return;
+  await db.purchases.clear();
+  await db.sales.clear();
+  await db.settings.clear();
+  showToast('All data cleared', 'info');
+  refreshDashboard();
+  refreshTickerDropdowns();
+}
+
+// ======================================================
+//  TAB TOGGLE
+// ======================================================
+function setTxTab(tab) {
+  document.getElementById('tab-buy').classList.toggle('active', tab==='buy');
+  document.getElementById('tab-sell').classList.toggle('active', tab==='sell');
+  document.getElementById('buy-form-wrap').style.display = tab==='buy' ? 'block' : 'none';
+  document.getElementById('sell-form-wrap').style.display = tab==='sell' ? 'block' : 'none';
+  document.getElementById('tx-page-title').textContent = tab === 'buy' ? 'Buy' : 'Sell';
+  if (tab === 'sell') refreshTickerDropdowns();
+}
+
+// ======================================================
+//  MODAL HELPERS
+// ======================================================
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+});
+
+// ======================================================
+//  INIT
+// ======================================================
+async function init() {
+  try {
+    db = await openDB();
+    await loadSettings();
+    const today = new Date().toISOString().split('T')[0];
+    ['buy-date','sell-date'].forEach(id => { const el = document.getElementById(id); if(el) el.value = today; });
+    updateBuyBreakdown();
+    await refreshDashboard();
+    await refreshTickerDropdowns();
+  } catch(err) {
+    console.error('Init error:', err);
+    showToast('App init error: ' + (err.message || err), 'error');
+  }
+}
+
+init();
+</script>
+
+</body>
+</html>
